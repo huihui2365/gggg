@@ -26,7 +26,7 @@ jobs:
 
       - name: 运行爬虫（极速版）
         run: |
-          python crawler.py
+          python py/crawler.py
 
       - name: 提交更新
         run: |
