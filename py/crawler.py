@@ -1,4 +1,4 @@
-# crawler.py  —— 专为 GitHub Actions 优化版（type_id=63）
+# crawler.py
 import json
 import random
 import re
@@ -8,27 +8,26 @@ import requests
 from bs4 import BeautifulSoup
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
+from time import sleep
 
 # ==================== 配置 ====================
 base_url = "https://sex8zy.com"
 type_id = 63
 start_page = 1
-end_page = 2                     # 你现在只跑2页，后面想跑更多直接改数字
+end_page = 2
 output_dir = Path("test/output")
 list_path = output_dir / "result.json"
 detail_path = output_dir / "detail_result.json"
 
-MAX_WORKERS = 15                 # GitHub Actions 最佳值（别超过20）
+MAX_WORKERS = 15
 TIMEOUT = 20
 
-# 随机UA池
 UA_LIST = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
 ]
 
-# 创建带重试的 Session
 session = requests.Session()
 retry = Retry(total=3, backoff_factor=1.5, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(pool_connections=50, pool_maxsize=MAX_WORKERS*2, max_retries=retry)
@@ -37,90 +36,67 @@ session.mount("https://", adapter)
 
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# ==================== 第一步：并发抓列表 ====================
+# ==================== 列表页 ====================
 if list_path.exists():
-    print("检测到已有 result.json，直接加载...")
+    print("加载已有 result.json")
     video_list = json.load(open(list_path, "r", encoding="utf-8"))
 else:
-    print(f"开始并发抓取第 {start_page}-{end_page} 页列表...")
+    print("抓取列表页...")
     video_list = []
-
-    def fetch_list_page(page):
-        url = f"{base_url}/index.php/vod/type/id/{type_id}/page/{page}.html"
-        headers = {"User-Agent": random.choice(UA_LIST)}
+    def fetch_list(p):
+        url = f"{base_url}/index.php/vod/type/id/{type_id}/page/{p}.html"
         try:
-            r = session.get(url, headers=headers, timeout=TIMEOUT)
+            r = session.get(url, headers={"User-Agent": random.choice(UA_LIST)}, timeout=TIMEOUT)
             r.raise_for_status()
             r.encoding = r.apparent_encoding
             soup = BeautifulSoup(r.text, "html.parser")
             items = []
             for a in soup.find_all("a", class_="row", href=True):
-                href = a["href"]
-                if re.match(r"/index.php/vod/detail/id/\d+\.html", href):
-                    li = a.find("li", style=re.compile("text-align: ?left"))
+                if re.match(r"/index.php/vod/detail/id/\d+\.html", a["href"]):
+                    li = a.find("li", style=re.compile("text-align"))
                     if li:
-                        title = li.get_text(strip=True)
-                        items.append({"title": title, "url": base_url + href})
-            print(f"第 {page} 页 → {len(items)} 条")
+                        items.append({"title": li.text.strip(), "url": base_url + a["href"]})
+            print(f"第{p}页: {len(items)}条")
             return items
         except Exception as e:
-            print(f"第 {page} 页失败：{e}")
+            print(f"第{p}页失败: {e}")
             return []
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        for items in executor.map(fetch_list_page, range(start_page, end_page + 1)):
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        for items in ex.map(fetch_list, range(start_page, end_page+1)):
             video_list.extend(items)
             sleep(random.uniform(0.5, 1.2))
 
-    with open(list_path, "w", encoding="utf-8") as f:
-        json.dump(video_list, f, ensure_ascii=False, indent=2)
-    print(f"列表完成！共 {len(video_list)} 条\n")
+    json.dump(video_list, open(list_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
-# ==================== 第二步：并发抓详情 ====================
+# ==================== 详情页 ====================
 def fetch_detail(task):
-    idx, total, item = task
-    url = item["url"]
-    headers = {"User-Agent": random.choice(UA_LIST)}
+    idx, item = task
     try:
-        r = session.get(url, headers=headers, timeout=TIMEOUT)
+        r = session.get(item["url"], headers={"User-Agent": random.choice(UA_LIST)}, timeout=TIMEOUT)
         r.raise_for_status()
         r.encoding = r.apparent_encoding
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        img = soup.find("img", id="detail-img")["src"] if soup.find("img", id="detail-img") else None
-        title = soup.find("h1", class_="limit").get_text(strip=True) if soup.find("h1", class_="limit") else item["title"]
-        m3u8_input = soup.find("input", id="playId1")
-        m3u8 = (m3u8_input["value"].split("$")[-1] if m3u8_input and "$" in m3u8_input["value"] else 
-                m3u8_input["value"] if m3u8_input else "")
-
-        return {
-            "title": title,
-            "url": url,
-            "image": img,
-            "m3u8": m3u8.strip()
-        }
+        s = BeautifulSoup(r.text, "html.parser")
+        img = s.find("img", id="detail-img")["src"] if s.find("img", id="detail-img") else None
+        title = s.find("h1", class_="limit").get_text(strip=True) if s.find("h1", class_="limit") else item["title"]
+        m3u8 = ""
+        inp = s.find("input", id="playId1")
+        if inp and inp.get("value"):
+            val = inp["value"]
+            m3u8 = val.split("$")[-1] if "$" in val else val
+        return {"title": title, "url": item["url"], "image": img, "m3u8": m3u8.strip()}
     except Exception as e:
-        return {"title": "【失败】" + item["title"], "url": url, "image": None, "m3u8": "", "error": str(e)}
+        return {"title": "[失败]"+item["title"], "url": item["url"], "image": None, "m3u8": "", "error": str(e)}
 
-# 如果已有完整详情且数量一致就跳过
-if detail_path.exists() and len(json.load(open(detail_path))) >= len(video_list):
-    print("detail_result.json 已存在且完整，直接结束")
-else:
-    print(f"开始并发抓取 {len(video_list)} 条详情（线程数：{MAX_WORKERS}）...")
-    tasks = [(i+1, len(video_list), item) for i, item in enumerate(video_list)]
+if not detail_path.exists() or len(json.load(open(detail_path))) < len(video_list):
+    print(f"并发抓取 {len(video_list)} 条详情...")
+    tasks = [(i, item) for i, item in enumerate(video_list)]
     results = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        for future in as_completed({ex.submit(fetch_detail, t): t for t in tasks}):
+            results.append(future.result())
+    # 保持原顺序
+    results = [r for _, item in tasks for r in results if r["url"] == item["url"]]
+    json.dump(results, open(detail_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for future in as_completed({executor.submit(fetch_detail, t): t[0] for t in tasks}.keys()):
-            result = future.result()
-            results.append(result)
-            status = "成功" if "error" not in result else "失败"
-            print(f"[{result['url'].split('/')[-1]:>15}] {status} {result['title'][:40]}")
-
-    # 保持原始顺序
-    results = sorted(results, key=lambda x: video_list.index(next(i for i in video_list if i["url"] == x["url"])))
-
-    with open(detail_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-
-print(f"\n全部完成！结果保存在：{detail_path}")
+print(f"全部完成 → {detail_path}")
