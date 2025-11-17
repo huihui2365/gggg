@@ -16,8 +16,8 @@ type_id = 57
 start_page = 1
 end_page = 147
 output_dir = Path("test/output")
-list_path = output_dir / "result.json"
-detail_path = output_dir / "detail_result.json"
+list_path = output_dir / "result2.json"
+detail_path = output_dir / "detail_result2.json"
 
 MAX_WORKERS = 15
 TIMEOUT = 20
