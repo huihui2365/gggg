@@ -1,5 +1,5 @@
 # .github/workflows/crawl.yml
-name: 抓取 sex8zy type_id=63
+name: 抓取 sex8zy 
 
 on:
   workflow_dispatch:      # 手动触发
