@@ -1,39 +1,43 @@
-name: Run Python Script
+# .github/workflows/crawl.yml
+name: 抓取 sex8zy type_id=63
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:      # 手动触发
+  schedule:
+    - cron: '0 */12 * * *'  # 可选：每12小时自动更新一次
+
+permissions:
+  contents: write   # 必须加这行，不然无法 push
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: 设置 Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests beautifulsoup4 lxml
+      - name: 安装依赖
+        run: |
+          pip install requests beautifulsoup4 lxml
 
-    - name: Run the script
-      run: |
-        python -u py/merge_script.py   # 你的脚本路径
+      - name: 运行爬虫（极速版）
+        run: |
+          python crawler.py
 
-    - name: Commit and push results
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add test/output/*.json || echo "No new JSON files"
-        git commit -m "Auto update video data $(date '+%Y-%m-%d %H:%M')" || echo "Nothing to commit"
-        git push
+      - name: 提交更新
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/output/*.json
+          git commit -m "更新 type_id=63 数据 $(date -u '+UTC %Y-%m-%d %H:%M')" || echo "无变化"
+          git push
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: detail_result.json
-        path: test/output/detail_result.json
+      - name: 上传结果文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: detail_result.json
+          path: test/output/detail_result.json
