@@ -13,12 +13,12 @@ from time import sleep
 
 # ========== 配置 ==========
 base_url = "http://fhzy10.com/"
-type_id = 6
+type_id = 4
 start_page = 1
-end_page = 241
+end_page = 181
 output_dir = Path("test/output")
-list_path = output_dir / "result_list6.json"
-detail_path = output_dir / "result_detai6.json"
+list_path = output_dir / "result_list4.json"
+detail_path = output_dir / "result_detai4.json"
 
 MAX_WORKERS = 12
 TIMEOUT = 15
@@ -149,6 +149,7 @@ with open(detail_path, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
 print(f"\n抓取完成！共 {len(results)} 条 → {detail_path}")
+
 
 
 
