@@ -16,7 +16,7 @@ base_url = "http://fhzy10.com/"
 type_id = 2
 start_page = 1
 end_page = 187
-output_dir = Path("/volume1/docker/python_scripts/ddd")
+output_dir = Path("test/output")
 list_path = output_dir / "result_list.json"
 detail_path = output_dir / "result_detail.json"
 
@@ -149,4 +149,5 @@ with open(detail_path, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
 print(f"\n抓取完成！共 {len(results)} 条 → {detail_path}")
+
 
